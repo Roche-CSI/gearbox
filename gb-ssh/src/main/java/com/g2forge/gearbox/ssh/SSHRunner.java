@@ -17,11 +17,13 @@ import com.g2forge.alexandria.annotations.note.Note;
 import com.g2forge.alexandria.annotations.note.NoteType;
 import com.g2forge.alexandria.command.invocation.CommandInvocation;
 import com.g2forge.alexandria.command.invocation.environment.SystemEnvironment;
+import com.g2forge.alexandria.command.invocation.format.ICommandFormat;
 import com.g2forge.alexandria.java.close.ICloseable;
 import com.g2forge.alexandria.java.core.error.NotYetImplementedError;
 import com.g2forge.alexandria.java.io.RuntimeIOException;
 import com.g2forge.gearbox.command.process.IProcess;
 import com.g2forge.gearbox.command.process.IRunner;
+import com.g2forge.gearbox.command.process.MetaCommandArgument;
 import com.g2forge.gearbox.command.process.redirect.IRedirect;
 
 public class SSHRunner implements IRunner, ICloseable {
@@ -34,6 +36,10 @@ public class SSHRunner implements IRunner, ICloseable {
 	protected final ClientSession session;
 
 	protected boolean open = false;
+
+	public SSHRunner(Duration closeDuration, final SSHConfig config) {
+		this(SshClient.setUpDefaultClient(), true, closeDuration, config);
+	}
 
 	protected SSHRunner(final SshClient client, final boolean ownClient, Duration closeDuration, final SSHConfig config) {
 		Objects.requireNonNull(client);
@@ -52,30 +58,34 @@ public class SSHRunner implements IRunner, ICloseable {
 		this(client, false, closeDuration, config);
 	}
 
-	public SSHRunner(Duration closeDuration, final SSHConfig config) {
-		this(SshClient.setUpDefaultClient(), true, closeDuration, config);
-	}
-
 	@Note(type = NoteType.TODO, value = "IO redirection and working directories")
 	@Note(type = NoteType.TODO, value = "Environment variables")
 	@Override
-	public IProcess apply(CommandInvocation<IRedirect, IRedirect> commandInvocation) {
+	public IProcess apply(CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> commandInvocation) {
 		if ((commandInvocation.getEnvironment() != null) && !(commandInvocation.getEnvironment() instanceof SystemEnvironment)) throw new NotYetImplementedError("SSH does not yet support environment variable modifications at the process level!");
 
 		ensureOpen();
 		final ChannelExec channel;
-		try {
-			final String command = commandInvocation.getArguments().stream().collect(Collectors.joining(" "));
-			channel = session.createExecChannel(command);
-			if (!channel.open().await()) throw new RuntimeIOException();
-		} catch (IOException exception) {
-			throw new RuntimeIOException(exception);
+		final Throwable launchException;
+		{
+			ChannelExec _channel = null;
+			Throwable _launchException = null;
+			try {
+				final ICommandFormat format = commandInvocation.getFormat();
+				final String command = commandInvocation.getArguments().stream().map(MetaCommandArgument::getValue).map(format::quote).collect(Collectors.joining(" "));
+				_channel = session.createExecChannel(command);
+				if (!_channel.open().await()) throw new RuntimeIOException();
+			} catch (Throwable throwable) {
+				_launchException = throwable;
+			}
+			channel = _channel;
+			launchException = _launchException;
 		}
 
 		return new IProcess() {
 			@Override
 			public void close() {
-				try {
+				if (isLaunched()) try {
 					if (closeDuration == null) channel.close();
 					else channel.close(false).await(closeDuration);
 				} catch (IOException e) {
@@ -85,28 +95,37 @@ public class SSHRunner implements IRunner, ICloseable {
 
 			@Override
 			public int getExitCode() {
+				assertLaunch();
 				channel.waitFor(EnumSet.of(ClientChannelEvent.CLOSED, ClientChannelEvent.EXIT_SIGNAL, ClientChannelEvent.EXIT_STATUS), 0);
 				return channel.getExitStatus();
 			}
 
 			@Override
+			public Throwable getLaunchException() {
+				return launchException;
+			}
+
+			@Override
 			public InputStream getStandardError() {
+				assertLaunch();
 				return channel.getInvertedErr();
 			}
 
 			@Override
 			public OutputStream getStandardInput() {
+				assertLaunch();
 				return channel.getInvertedIn();
 			}
 
 			@Override
 			public InputStream getStandardOutput() {
+				assertLaunch();
 				return channel.getInvertedOut();
 			}
 
 			@Override
 			public boolean isRunning() {
-				return channel.isOpen();
+				return isLaunched() && channel.isOpen();
 			}
 		};
 	}

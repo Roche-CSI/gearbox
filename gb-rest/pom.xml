@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>com.g2forge.gearbox</groupId>
 		<artifactId>gb-project</artifactId>
-		<version>0.0.10-SNAPSHOT</version>
+		<version>0.0.12-SNAPSHOT</version>
 		<relativePath>../gb-project/pom.xml</relativePath>
 	</parent>
 
@@ -15,7 +15,7 @@
 
 	<properties>
 		<retrofit.version>2.9.0</retrofit.version>
-		<okhttp.version>4.9.0</okhttp.version>
+		<okhttp.version>4.9.2</okhttp.version>
 	</properties>
 
 	<dependencies>

@@ -1,7 +1,6 @@
 package com.g2forge.gearbox.command.process;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
@@ -14,7 +13,6 @@ import com.g2forge.alexandria.command.stdio.StandardIO;
 import com.g2forge.alexandria.command.stdio.StandardIO.StandardIOBuilder;
 import com.g2forge.alexandria.java.function.IFunction2;
 import com.g2forge.alexandria.java.io.HIO;
-import com.g2forge.alexandria.java.io.RuntimeIOException;
 import com.g2forge.alexandria.java.type.function.TypeSwitch2;
 import com.g2forge.gearbox.command.process.redirect.FileRedirect;
 import com.g2forge.gearbox.command.process.redirect.IRedirect;
@@ -45,20 +43,27 @@ public class ProcessBuilderRunner implements IRunner {
 	}
 
 	@Override
-	public IProcess apply(CommandInvocation<IRedirect, IRedirect> commandInvocation) {
+	public IProcess apply(CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> commandInvocation) {
 		// Wrap the command
-		final CommandInvocation<IRedirect, IRedirect> wrapped = getCommandRunner().wrap(commandInvocation);
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> wrapped = getCommandRunner().wrap(commandInvocation);
 		// Translate the redirects to process builder format
-		final CommandInvocation<ProcessBuilder.Redirect, ProcessBuilder.Redirect> translated = translateRedirects(wrapped);
+		final CommandInvocation<MetaCommandArgument, ProcessBuilder.Redirect, ProcessBuilder.Redirect> translated = translateRedirects(wrapped);
 		// Create the process builder
 		final ProcessBuilder builder = HProcess.createProcessBuilder(translated);
 
 		// Start the process
 		final Process process;
-		try {
-			process = builder.start();
-		} catch (IOException exception) {
-			throw new RuntimeIOException(exception);
+		final Throwable launchException;
+		{
+			Process _process = null;
+			Throwable _launchException = null;
+			try {
+				_process = builder.start();
+			} catch (Throwable throwable) {
+				_launchException = throwable;
+			}
+			process = _process;
+			launchException = _launchException;
 		}
 
 		// Generate a process object so the caller can access it
@@ -68,12 +73,15 @@ public class ProcessBuilderRunner implements IRunner {
 
 			@Override
 			public void close() {
-				process.descendants().forEach(handle -> handle.destroy());
-				process.destroy();
-				HIO.closeAll(process.getInputStream(), process.getErrorStream(), process.getOutputStream());
+				if (isLaunched()) {
+					process.descendants().forEach(handle -> handle.destroy());
+					process.destroy();
+					HIO.closeAll(process.getInputStream(), process.getErrorStream(), process.getOutputStream());
+				}
 			}
 
 			protected int computeExitCode() {
+				assertLaunch();
 				try {
 					return process.waitFor();
 				} catch (InterruptedException e) {
@@ -83,31 +91,40 @@ public class ProcessBuilderRunner implements IRunner {
 
 			@Override
 			public InputStream getStandardError() {
+				assertLaunch();
 				return process.getErrorStream();
 			}
 
 			@Override
 			public OutputStream getStandardInput() {
+				assertLaunch();
 				return process.getOutputStream();
 			}
 
 			@Override
 			public InputStream getStandardOutput() {
+				assertLaunch();
 				return process.getInputStream();
 			}
 
 			@Override
 			public boolean isRunning() {
-				return process.isAlive();
+				return isLaunched() && process.isAlive();
+			}
+
+			@Override
+			public Throwable getLaunchException() {
+				return launchException;
 			}
 		};
 	}
 
-	protected CommandInvocation<ProcessBuilder.Redirect, ProcessBuilder.Redirect> translateRedirects(final CommandInvocation<IRedirect, IRedirect> wrapped) {
-		final CommandInvocation<ProcessBuilder.Redirect, ProcessBuilder.Redirect> translated;
+	protected CommandInvocation<MetaCommandArgument, ProcessBuilder.Redirect, ProcessBuilder.Redirect> translateRedirects(final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> wrapped) {
+		final CommandInvocation<MetaCommandArgument, ProcessBuilder.Redirect, ProcessBuilder.Redirect> translated;
 		{ // Translate the redirects
-			final CommandInvocation.CommandInvocationBuilder<ProcessBuilder.Redirect, ProcessBuilder.Redirect> invocationBuilder = CommandInvocation.builder();
+			final CommandInvocation.CommandInvocationBuilder<MetaCommandArgument, ProcessBuilder.Redirect, ProcessBuilder.Redirect> invocationBuilder = CommandInvocation.builder();
 			invocationBuilder.format(wrapped.getFormat());
+			invocationBuilder.type(wrapped.getType());
 			invocationBuilder.working(wrapped.getWorking());
 			invocationBuilder.arguments(wrapped.getArguments());
 			invocationBuilder.environment(wrapped.getEnvironment());

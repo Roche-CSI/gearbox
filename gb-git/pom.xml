@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>com.g2forge.gearbox</groupId>
 		<artifactId>gb-project</artifactId>
-		<version>0.0.10-SNAPSHOT</version>
+		<version>0.0.12-SNAPSHOT</version>
 		<relativePath>../gb-project/pom.xml</relativePath>
 	</parent>
 
@@ -40,6 +40,12 @@
 					<artifactId>slf4j-api</artifactId>
 				</exclusion>
 			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>com.g2forge.alexandria</groupId>
+			<artifactId>ax-wizard</artifactId>
+			<version>${alexandria.version}</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>

@@ -18,12 +18,16 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.g2forge.alexandria.adt.collection.CircularBuffer;
+import com.g2forge.alexandria.collection.CircularBuffer;
 import com.g2forge.alexandria.command.stdio.IStandardIO;
 import com.g2forge.alexandria.command.stdio.StandardIO;
+import com.g2forge.alexandria.java.close.HCloseable;
 import com.g2forge.alexandria.java.close.ICloseable;
 import com.g2forge.alexandria.java.concurrent.AThreadActor;
+import com.g2forge.alexandria.java.core.helpers.HStream;
 import com.g2forge.alexandria.java.core.marker.ISingleton;
+import com.g2forge.alexandria.java.core.stream.DelayedDelegatingSpliterator;
+import com.g2forge.alexandria.java.function.ISupplier;
 import com.g2forge.alexandria.java.io.HIO;
 import com.g2forge.alexandria.java.io.HTextIO;
 import com.g2forge.gearbox.command.process.IProcess;
@@ -54,7 +58,7 @@ public class StreamResultSupplier implements IResultSupplier<Stream<String>>, IS
 		public void close() {
 			done = true;
 			try {
-				if (!process.isRunning() && !process.isSuccess()) {
+				if (!process.isSuccess()) {
 					final List<String> lines = buffer.getList();
 					final StringBuilder builder = new StringBuilder().append("Showing last ").append(lines.size()).append(" lines of output:\n");
 					final Consumer<? super String> printer = line -> builder.append('\t').append(line).append('\n');
@@ -152,7 +156,7 @@ public class StreamResultSupplier implements IResultSupplier<Stream<String>>, IS
 					while (queue.size() >= capacity) {
 						if (!isOpen()) return;
 						synchronized (queue) {
-							queue.wait();
+							if (queue.size() >= capacity) queue.wait(1000);
 						}
 					}
 
@@ -189,12 +193,34 @@ public class StreamResultSupplier implements IResultSupplier<Stream<String>>, IS
 
 	public static final StreamResultSupplier STANDARD = new StreamResultSupplier(50, new StandardIO<>(null, true, true));
 
+	public static final int CHARACTERISTICS = Spliterator.ORDERED | Spliterator.NONNULL;
+
+	@SafeVarargs
+	public static <T> Stream<T> chain(ISupplier<? extends Stream<T>>... suppliers) {
+		if (suppliers.length < 1) return Stream.empty();
+		if (suppliers.length == 1) return suppliers[0].get();
+
+		final List<Stream<T>> open = new ArrayList<>();
+		final List<Stream<T>> streams = new ArrayList<>(suppliers.length);
+		for (int i = 0; i < suppliers.length; i++) {
+			final ISupplier<? extends Stream<T>> supplier = suppliers[i];
+			if (i == 0) streams.add(supplier.get());
+			else streams.add(StreamSupport.stream(new DelayedDelegatingSpliterator<T, Spliterator<T>>(() -> {
+				final Stream<T> retVal = supplier.get();
+				open.add(retVal);
+				return retVal.spliterator();
+			}, CHARACTERISTICS), false));
+		}
+		return HStream.concat(streams).onClose(() -> HCloseable.close(open));
+	}
+
 	protected final int lines;
 
 	protected final IStandardIO<Void, Boolean> include;
 
 	@Override
 	public Stream<String> apply(IProcess process) {
+		process.assertLaunch();
 		final List<Stream2Queue> threads = new ArrayList<>(2);
 		try {
 			final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
@@ -202,7 +228,7 @@ public class StreamResultSupplier implements IResultSupplier<Stream<String>>, IS
 			if (getInclude().getStandardError()) threads.add(new Stream2Queue(process.getStandardError(), 50, queue));
 			threads.forEach(Stream2Queue::open);
 			final IOIterator iterator = new IOIterator(threads, queue, process);
-			return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED | Spliterator.NONNULL), false).onClose(iterator::close);
+			return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, CHARACTERISTICS), false).onClose(iterator::close);
 		} catch (Throwable throwable) {
 			HIO.closeAll(threads);
 			throw throwable;

@@ -13,6 +13,7 @@ import com.g2forge.alexandria.java.core.helpers.HCollection;
 import com.g2forge.alexandria.java.function.IConsumer1;
 import com.g2forge.alexandria.java.platform.HPlatform;
 import com.g2forge.alexandria.test.HAssert;
+import com.g2forge.gearbox.command.process.MetaCommandArgument;
 import com.g2forge.gearbox.command.process.redirect.IRedirect;
 import com.g2forge.gearbox.command.proxy.ProxyInvocationHandler;
 import com.g2forge.gearbox.command.proxy.method.ITestCommandInterface;
@@ -97,10 +98,16 @@ public class TestDumbCommandConverter {
 		public String method(String argument);
 	}
 
+	public interface IConstantEnvironment extends ITestCommandInterface {
+		@ConstantEnvironment(variable = "X", value = "A")
+		@Command(value = "method", env = { @ConstantEnvironment(variable = "Y", value = "B") })
+		public String method();
+	}
+
 	@Getter(lazy = true)
 	private static final ProxyInvocationHandler handler = computeHandler();
 
-	public static <T> CommandInvocation<IRedirect, IRedirect> assertCommand(Class<T> type, IConsumer1<? super T> invoke, Class<? extends IResultSupplier<?>> expectedResultSupplierType, Path expectedWorking, String... expectedArguments) {
+	public static <T> CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> assertCommand(Class<T> type, IConsumer1<? super T> invoke, Class<? extends IResultSupplier<?>> expectedResultSupplierType, Path expectedWorking, String... expectedArguments) {
 		final T proxy = createProxy(type);
 		try {
 			invoke.accept(proxy);
@@ -108,9 +115,9 @@ public class TestDumbCommandConverter {
 		} catch (ReturnProcessInvocationException exception) {
 			final ProcessInvocation<?> processInvocation = exception.getProcessInvocation();
 
-			final CommandInvocation<IRedirect, IRedirect> commandInvocation = processInvocation.getCommandInvocation();
+			final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> commandInvocation = processInvocation.getCommandInvocation();
 			HAssert.assertEquals(expectedWorking, commandInvocation.getWorking());
-			HAssert.assertEquals(HCollection.asList(expectedArguments), commandInvocation.getArguments());
+			HAssert.assertEquals(HCollection.asList(expectedArguments), MetaCommandArgument.toStrings(commandInvocation.getArguments()));
 			HAssert.assertEquals(expectedResultSupplierType, processInvocation.getResultSupplier().getClass());
 			return commandInvocation;
 		}
@@ -124,6 +131,13 @@ public class TestDumbCommandConverter {
 		@SuppressWarnings("unchecked")
 		final T proxy = (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, getHandler());
 		return proxy;
+	}
+
+	@Test
+	public void constantEnvironment() {
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> command = assertCommand(IConstantEnvironment.class, x -> x.method(), StringResultSupplier.class, null, "method");
+		HAssert.assertEquals("A", command.getEnvironment().apply("X"));
+		HAssert.assertEquals("B", command.getEnvironment().apply("Y"));
 	}
 
 	@Test
@@ -145,21 +159,21 @@ public class TestDumbCommandConverter {
 	@Test
 	public void environment() {
 		final String a = "aval", b = "bval";
-		final CommandInvocation<IRedirect, IRedirect> command = assertCommand(IEnvironment.class, x -> x.method(a, Paths.get(b)), VoidResultSupplier.class, null, "method");
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> command = assertCommand(IEnvironment.class, x -> x.method(a, Paths.get(b)), VoidResultSupplier.class, null, "method");
 		HAssert.assertEquals(a, command.getEnvironment().apply("a"));
 		HAssert.assertEquals(b, command.getEnvironment().apply("b"));
 	}
 
 	@Test
 	public void environmentNull() {
-		final CommandInvocation<IRedirect, IRedirect> command = assertCommand(IEnvironmentNull.class, x -> x.method(null), VoidResultSupplier.class, null, "method");
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> command = assertCommand(IEnvironmentNull.class, x -> x.method(null), VoidResultSupplier.class, null, "method");
 		HAssert.assertNull(command.getEnvironment().apply("a"));
 	}
 
 	@Test
 	public void envPath() {
 		final String value = "path";
-		final CommandInvocation<IRedirect, IRedirect> command = assertCommand(IEnvPath.class, x -> x.method(Paths.get(value)), VoidResultSupplier.class, null, "method");
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> command = assertCommand(IEnvPath.class, x -> x.method(Paths.get(value)), VoidResultSupplier.class, null, "method");
 		HAssert.assertEquals(value, command.getEnvironment().apply(HPlatform.PATH));
 	}
 

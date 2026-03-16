@@ -1,0 +1,56 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+	<modelVersion>4.0.0</modelVersion>
+	<artifactId>gb-issue</artifactId>
+
+	<parent>
+		<groupId>com.g2forge.gearbox</groupId>
+		<artifactId>gb-project</artifactId>
+		<version>0.0.12-SNAPSHOT</version>
+		<relativePath>../gb-project/pom.xml</relativePath>
+	</parent>
+
+	<name>Gearbox Issue</name>
+	<description>Issue logging API.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.g2forge.alexandria</groupId>
+			<artifactId>ax-adt</artifactId>
+			<version>${alexandria.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.g2forge.alexandria</groupId>
+			<artifactId>ax-log</artifactId>
+			<version>${alexandria.version}</version>
+		</dependency>
+		
+		<!-- CSV issue sink -->
+		<dependency>
+			<groupId>com.g2forge.gearbox</groupId>
+			<artifactId>gb-serdes</artifactId>
+			<version>${project.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-csv</artifactId>
+			<version>${jackson.version}</version>
+			<scope>test</scope>
+		</dependency>
+		
+		<!-- Document issue sink -->
+		<dependency>
+			<groupId>com.g2forge.enigma</groupId>
+			<artifactId>en-document</artifactId>
+			<version>${enigma.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.g2forge.habitat</groupId>
+			<artifactId>ha-trace</artifactId>
+			<version>${habitat.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

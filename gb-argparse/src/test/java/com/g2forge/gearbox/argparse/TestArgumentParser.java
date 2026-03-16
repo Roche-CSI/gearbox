@@ -6,13 +6,22 @@ import java.nio.file.Paths;
 import org.junit.Test;
 
 import com.g2forge.alexandria.java.core.helpers.HCollection;
+import com.g2forge.alexandria.java.function.IThrowRunnable;
 import com.g2forge.alexandria.test.HAssert;
+import com.g2forge.alexandria.test.HMatchers;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
 public class TestArgumentParser {
+	@Data
+	@Builder(toBuilder = true)
+	@AllArgsConstructor
+	protected static class Array {
+		protected final String[] strings;
+	}
+
 	@Data
 	@Builder(toBuilder = true)
 	@AllArgsConstructor
@@ -47,9 +56,18 @@ public class TestArgumentParser {
 
 	@Data
 	@Builder(toBuilder = true)
-	@AllArgsConstructor
-	protected static class Array {
-		protected final String[] strings;
+	protected static class Unannotated {
+		@Parameter("--unannotated")
+		protected final String unannotated;
+
+		/**
+		 * Manually created constructor, so that the {@link Parameter} annotation does NOT appear on the parameter, thereby triggering our runtime lint check.
+		 * 
+		 * @param unannotated A parameter which is unannotated, matching a field which is annotated.
+		 */
+		public Unannotated(String unannotated) {
+			this.unannotated = unannotated;
+		}
 	}
 
 	@Data
@@ -57,11 +75,6 @@ public class TestArgumentParser {
 	@AllArgsConstructor
 	protected static class Unparseable {
 		protected final Unparseable unparseable;
-	}
-
-	@Test
-	public void unparseable() {
-		HAssert.assertThrows(UnparseableArgumentException.class, () -> ArgumentParser.parse(Unparseable.class, HCollection.asList("argument")));
 	}
 
 	@Test
@@ -84,7 +97,8 @@ public class TestArgumentParser {
 
 	@Test
 	public void missing() {
-		HAssert.assertException(UnspecifiedParameterException.class, "Parameter #0 (string) was not specified!", () -> ArgumentParser.parse(Ordered.class, HCollection.asList()));
+		final IThrowRunnable<RuntimeException> runnable = () -> ArgumentParser.parse(Ordered.class, HCollection.asList());
+		HAssert.assertThat(runnable, HMatchers.isThrowable(ArgumentHelpException.class, HMatchers.equalTo("\n\nArguments: <string>\n")));
 	}
 
 	@Test
@@ -111,5 +125,15 @@ public class TestArgumentParser {
 		final String expected = "value";
 		final Ordered actual = ArgumentParser.parse(Ordered.class, HCollection.asList(expected));
 		HAssert.assertEquals(new Ordered(expected), actual);
+	}
+
+	@Test
+	public void unannotated() {
+		HAssert.assertThrows(RuntimeException.class, () -> ArgumentParser.parse(Unannotated.class, HCollection.asList("--unannotated", "value")));
+	}
+
+	@Test
+	public void unparseable() {
+		HAssert.assertThrows(UnparseableArgumentException.class, () -> ArgumentParser.parse(Unparseable.class, HCollection.asList("argument")));
 	}
 }

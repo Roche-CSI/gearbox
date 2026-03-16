@@ -11,4 +11,6 @@ import java.lang.annotation.Target;
 @Documented
 public @interface Command {
 	public String[] value();
+
+	public ConstantEnvironment[] env() default {};
 }

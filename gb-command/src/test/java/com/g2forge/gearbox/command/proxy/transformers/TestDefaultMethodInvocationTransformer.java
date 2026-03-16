@@ -10,6 +10,7 @@ import com.g2forge.alexandria.command.invocation.CommandInvocation;
 import com.g2forge.alexandria.java.core.helpers.HCollection;
 import com.g2forge.alexandria.java.core.helpers.HStream;
 import com.g2forge.alexandria.test.HAssert;
+import com.g2forge.gearbox.command.process.MetaCommandArgument;
 import com.g2forge.gearbox.command.process.redirect.IRedirect;
 import com.g2forge.gearbox.command.proxy.method.ITestCommandInterface;
 import com.g2forge.gearbox.command.proxy.method.MethodInvocation;
@@ -35,12 +36,12 @@ public class TestDefaultMethodInvocationTransformer {
 
 	@Test
 	public void defaultModify() {
-		final CommandInvocation<IRedirect, IRedirect> commandInvocation = CommandInvocation.<IRedirect, IRedirect>builder().build();
-		
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> commandInvocation = CommandInvocation.<MetaCommandArgument, IRedirect, IRedirect>builder().build();
+
 		final Method[] methods = IDefaultModify.class.getDeclaredMethods();
 		final Method method = HStream.findOne(Stream.of(methods).filter(m -> !Modifier.isStatic(m.getModifiers())));
 		final MethodInvocation methodInvocation = new MethodInvocation(new IDefaultModify() {}, method, HCollection.emptyList());
-		
+
 		final ProcessInvocation<?> processInvocation = new DefaultMethodInvocationTransformer(new CustomInvocationTransformer(commandInvocation, 2)).apply(methodInvocation);
 		HAssert.assertSame(commandInvocation, processInvocation.getCommandInvocation());
 		HAssert.assertEquals(3, processInvocation.getResultSupplier().apply(null));
@@ -55,7 +56,7 @@ public class TestDefaultMethodInvocationTransformer {
 
 	@Test
 	public void noDefault() {
-		final CommandInvocation<IRedirect, IRedirect> commandInvocation = CommandInvocation.<IRedirect, IRedirect>builder().build();
+		final CommandInvocation<MetaCommandArgument, IRedirect, IRedirect> commandInvocation = CommandInvocation.<MetaCommandArgument, IRedirect, IRedirect>builder().build();
 		final MethodInvocation methodInvocation = new MethodInvocation(new INoDefault() {
 			@Override
 			public int method() {

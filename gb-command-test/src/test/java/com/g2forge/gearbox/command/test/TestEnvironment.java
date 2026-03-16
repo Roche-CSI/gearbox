@@ -17,6 +17,7 @@ import com.g2forge.gearbox.command.converter.ICommandConverterR_;
 import com.g2forge.gearbox.command.converter.dumb.DumbCommandConverter;
 import com.g2forge.gearbox.command.converter.dumb.EnvPath;
 import com.g2forge.gearbox.command.process.IProcess;
+import com.g2forge.gearbox.command.process.MetaCommandArgument;
 import com.g2forge.gearbox.command.process.ProcessBuilderRunner;
 import com.g2forge.gearbox.command.process.redirect.IRedirect;
 
@@ -35,7 +36,7 @@ public class TestEnvironment extends ATestCommand {
 	}
 
 	@Override
-	protected IFunction1<CommandInvocation<IRedirect, IRedirect>, IProcess> createRunner() {
+	protected IFunction1<CommandInvocation<MetaCommandArgument, IRedirect, IRedirect>, IProcess> createRunner() {
 		return new ProcessBuilderRunner(ICommandRunner.create(null));
 	}
 
